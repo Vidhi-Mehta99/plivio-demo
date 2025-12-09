@@ -48,7 +48,7 @@ A Flask application that calls the user
 1. **Start the Flask server**
 
    ```bash
-   python ivr_server.py
+   python ivr_server_.py
    ```
 
    The server will start on `http://localhost:9000`
@@ -66,7 +66,7 @@ A Flask application that calls the user
 
 - **Webhook not receiving calls**: Ensure ngrok is running and the URL is correctly configured in Plivo Console
 - **Authentication errors**: Verify your Auth ID and Auth Token
-- **Port already in use**: Change the port in `ivr_server.py` or kill the process using port 5000. Here, I changed it to 5001.
+- **Port already in use**: Change the port in `ivr_server_.py` or kill the process using port 5000. Here, I changed it to 5001.
 
 ## Required Plivo Credentials
 
