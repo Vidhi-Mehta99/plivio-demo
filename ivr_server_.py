@@ -109,38 +109,116 @@ def handle_language():
 @app.route('/menu/', methods=['GET', 'POST'])
 def handle_menu():
     lang = request.args.get('lang', 'en')
-    digit = request.form.get('Digits')
+    digit = request.args.get('Digits') or request.form.get('Digits')
+    
+    if not digit:
+        # If no digit was pressed, redirect back to language selection
+        response = plivoxml.ResponseElement()
+        response.add_redirect(f'{BASE_URL}/assistant/', method='GET')
+        return Response(response.to_string(False), mimetype='text/xml')
     
     if digit == '1':
-        # Play a message
-        if lang == 'es':
-            message = "Gracias por llamar. Hasta luego."
-            voice = 'Polly.Lupe'
-            language = 'es-ES'
-        else:
-            message = "Thank you for calling. Goodbye."
-            voice = 'Polly.Salli'
-            language = 'en-US'
-            
+        # Play the audio file
+        audio_url = "https://s3.amazonaws.com/plivocloud/Trumpet.mp3"
         response = plivoxml.ResponseElement()
-        response.add_speak(message, voice=voice, language=language)
+        
+        # Add a message before playing the audio
+        if lang == 'es':
+            response.add_speak("Reproduciendo el audio.", voice='Polly.Lupe', language='es-ES')
+        else:
+            response.add_speak("Playing the audio.", voice='Polly.Salli', language='en-US')
+        
+        # Add the audio file to be played
+        response.add_play(audio_url)
+        
+        # After playing the audio, give options to continue or hang up
+        if lang == 'es':
+            response.add_speak("Para volver al menú principal, presione 1. Para finalizar la llamada, presione 2.", 
+                             voice='Polly.Lupe', language='es-ES')
+        else:
+            response.add_speak("To return to the main menu, press 1. To end the call, press 2.",
+                             voice='Polly.Salli', language='en-US')
+        
+        # Get input from the user after playing the audio
+        response.add_get_digits(
+            action=f"{BASE_URL}/post_audio_menu/?lang={lang}",
+            method='POST',
+            timeout=10,
+            num_digits=1,
+            retries=1
+        )
+        
+        # If no input is received, say goodbye
+        if lang == 'es':
+            response.add_speak("Gracias por llamar. Hasta luego.", voice='Polly.Lupe', language='es-ES')
+        else:
+            response.add_speak("Thank you for calling. Goodbye.", voice='Polly.Salli', language='en-US')
         response.add_hangup()
+        
         return Response(response.to_string(False), mimetype='text/xml')
         
     elif digit == '2':
         # Connect to a live associate
         response = plivoxml.ResponseElement()
+        
+        # Add a message before connecting
+        if lang == 'es':
+            response.add_speak("Conectándote con un agente. Por favor, espere.", 
+                             voice='Polly.Lupe', 
+                             language='es-ES')
+        else:
+            response.add_speak("Connecting you to a live associate. Please hold.",
+                             voice='Polly.Salli',
+                             language='en-US')
+        
+        # Add the dial element to connect to the secondary number
         dial = response.add(plivoxml.DialElement(
             caller_id=os.getenv('PLIVO_NUMBER'),
-            callback_url=f"{BASE_URL}/call_action/",
-            callback_method='GET'
+            action=f"{BASE_URL}/call_action/",
+            method='GET',
+            timeout=30,  # Wait up to 30 seconds for the call to be answered
+            hangup_on_star=False,
+            time_limit=14400  # Maximum call duration: 4 hours
         ))
+        
+        # Add the secondary number to dial
         dial.add_number(os.getenv('SECONDARY_NUMBER'))
+        
         return Response(response.to_string(False), mimetype='text/xml')
     
     # Handle invalid input
     response = plivoxml.ResponseElement()
-    response.add_speak(WrongInput)
+    if lang == 'es':
+        response.add_speak("Opción no válida. Por favor, intente de nuevo.", 
+                         voice='Polly.Lupe',
+                         language='es-ES')
+    else:
+        response.add_speak("Invalid option. Please try again.",
+                         voice='Polly.Salli',
+                         language='en-US')
+    
+    # Redirect back to the menu
+    response.add_redirect(f"{BASE_URL}/menu/?lang={lang}", method='GET')
+    return Response(response.to_string(False), mimetype='text/xml')
+
+@app.route('/post_audio_menu/', methods=['POST'])
+def post_audio_menu():
+    lang = request.args.get('lang', 'en')
+    digit = request.form.get('Digits')
+    
+    response = plivoxml.ResponseElement()
+    
+    if digit == '1':
+        # Return to the main menu
+        response.add_redirect(f"{BASE_URL}/assistant/", method='GET')
+    else:
+        # End the call
+        if lang == 'es':
+            response.add_speak("Gracias por llamar. Hasta luego.", voice='Polly.Lupe', language='es-ES')
+        else:
+            response.add_speak("Thank you for calling. Goodbye.", voice='Polly.Salli', language='en-US')
+        response.add_hangup()
+    
     return Response(response.to_string(False), mimetype='text/xml')
 
 @app.route('/call_action/', methods=['GET', 'POST'])
